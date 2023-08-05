@@ -1,0 +1,80 @@
+version: "3.7"
+
+services:
+  front:
+    build:
+      context: ./apps/front
+    environment:
+      - NODE_ENV=development
+    ports:
+      - 3101:8080
+    volumes:
+      - ./apps/front:/front
+      - front-node-modules:/front/node_modules
+    working_dir: /front
+    command: /bin/sh -c "npm install && npm run dev"
+    tty: true
+
+  api_mock:
+    build:
+      context: ./apps/api_mock
+    platform: linux/amd64
+    ports:
+      - "3102:4010"
+    command: mock -h 0.0.0.0 -p 4010 /swagger/swagger.yml
+    volumes:
+      - ./doc/swagger/:/swagger
+    tty: true
+
+  api:
+    build:
+      context: ./apps/api
+    ports:
+      - "3103:8080"
+    volumes:
+      - ./apps/api:/api
+    working_dir: /api
+    command: /bin/sh -c "cargo watch -x fmt -s 'mold -run cargo run'"
+
+  db:
+    build:
+      context: ./apps/db
+    ports:
+      - 5432:5432
+    volumes:
+      - ./apps/db/initdb:/docker-entrypoint-initdb.d/
+      - ./apps/db/shared:/mnt/shared
+      - ./apps/db/data:/var/lib/postgresql/data
+
+  storybook:
+    build:
+      context: ./apps/front
+    environment:
+      - NODE_ENV=development
+    ports:
+      - 3105:6006
+    volumes:
+      - ./apps/front:/front
+      - storybook-node-modules:/front/node_modules
+    working_dir: /front
+    depends_on:
+      - front
+    command: /bin/sh -c "npm install && npm run storybook"
+  
+  proxy:
+    build:
+      context: ./apps/proxy
+    ports:
+      - 3200:80
+    volumes:
+      - ./apps/proxy/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+      - ./apps/proxy/assets:/var/assets
+    links:
+      - api_mock
+      - front
+
+volumes:
+  front-node-modules:
+  storybook-node-modules:
+
+
